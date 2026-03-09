@@ -8,9 +8,12 @@ BOT_TOKEN = "8285984712:AAHHJHQzkH1HAJ9wZTK4TB1TVtQ8VO8IX7s"
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # === YOUR CHANNELS (FIXED) ===
-CHANNEL_1 = "@VividYTOfficial"      # Public channel
-CHANNEL_2 = "-1002602851793"        # Vivid channel ID  
-CHANNEL_3 = "-1002773252709"        # Your private channel ID
+CHANNEL_1 = "@VividYTOfficial"      
+CHANNEL_2 = "-1002602851793"        
+CHANNEL_3 = "-1002773252709"        
+
+# === YOUR PROTECTED NUMBER ===
+MY_NUMBER = "8090544126"
 
 # === API CONFIGURATION ===
 API_TOKEN = "NIGHTFALLHUBz"
@@ -18,31 +21,24 @@ URL = "https://usesirosint.vercel.app/api/numinfo"
 
 # === CHANNEL MEMBERSHIP CHECK ===
 def is_user_member(user_id):
-    """Check if user joined ALL 2 channels"""
-    channels = [CHANNEL_2, CHANNEL_3]  # Both private channels
-    
+    channels = [CHANNEL_2, CHANNEL_3]
     for channel_id in channels:
         try:
             chat_member = bot.get_chat_member(channel_id, user_id)
             status = chat_member.status
             print(f"✅ {channel_id}: {status}")
-            
             if status not in ['member', 'administrator', 'creator']:
-                print(f"❌ User {user_id} not in {channel_id}")
                 return False
-                
         except Exception as e:
             print(f"❌ Error {channel_id}: {e}")
             return False
-    
-    print(f"✅ User {user_id} APPROVED!")
+    print(f"✅ User APPROVED!")
     return True
 
 # === START COMMAND ===
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.from_user.id
-    
     print(f"\n🔍 Checking user: {user_id}")
     
     if not is_user_member(user_id):
@@ -53,15 +49,9 @@ def send_welcome(message):
             "✅ *Dono join karo → /start karo*\n\n"
             "🔴 *Credit: ARPITxPROTON*"
         )
-        bot.send_message(
-            message.chat.id, 
-            join_msg, 
-            parse_mode='Markdown',
-            disable_web_page_preview=True
-        )
+        bot.send_message(message.chat.id, join_msg, parse_mode='Markdown', disable_web_page_preview=True)
         return
     
-    # ✅ APPROVED USER
     welcome_text = (
         "🎉 *WELCOME TO OSINT BOT* ✅\n\n"
         "🔍 **10-digit number bhejo**\n"
@@ -84,7 +74,7 @@ def handle_number(message):
     user_id = message.from_user.id
     query = message.text.strip()
 
-    # ❌ Channel check first
+    # Channel check
     if not is_user_member(user_id):
         bot.send_message(
             message.chat.id,
@@ -96,13 +86,26 @@ def handle_number(message):
         )
         return
 
-    # Number validation
+    # **🚫 YOUR NUMBER PROTECTION**
     num = ''.join(c for c in query if c.isdigit())
+    if num == MY_NUMBER:
+        troll_msg = (
+            "😂 **HE IS YOUR FATHER**\n\n"
+            "📱 **Number:** `8090544126`\n"
+            "👑 **Owner:** ARPITxPROTON\n\n"
+            "❌ *PAPA HU BETA TERA!*\n\n"
+            "🔴 *Credit: ARPITxPROTON*"
+        )
+        bot.send_message(message.chat.id, troll_msg, parse_mode='Markdown')
+        print(f"🚫 User {user_id} tried to search MY_NUMBER!")
+        return
+
+    # Normal validation
     if len(num) != 10:
         bot.send_message(message.chat.id, "⚠️ *10 DIGIT NUMBER BEJO*\n`9812345678`")
         return
 
-    # 🔍 Searching...
+    # Searching...
     msg = bot.send_message(message.chat.id, "🔍 *Searching leaks...*")
     
     try:
@@ -128,7 +131,7 @@ def handle_number(message):
                 seen.add(key)
                 unique.append(entry)
 
-        # 📊 Results
+        # Results
         text = f"🔍 **Results: `{num}`** ({len(unique)} entries)\n\n"
         for i, entry in enumerate(unique, 1):
             js_data = format_as_js(entry)
@@ -145,7 +148,8 @@ if __name__ == "__main__":
     print(f"{Fore.GREEN}🚀 OSINT BOT STARTING...{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}📢 Channel 1: {CHANNEL_2}{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}📢 Channel 2: {CHANNEL_3}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}✅ Both channels configured!{Style.RESET_ALL}")
+    print(f"{Fore.RED}🔒 Protected Number: {MY_NUMBER}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}✅ READY!{Style.RESET_ALL}")
     
     print("\n" + "="*50)
     bot.infinity_polling()
