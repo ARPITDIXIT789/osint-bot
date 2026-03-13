@@ -114,7 +114,7 @@ def handle_number(message):
         data = resp.json()
 
         if not data.get("success"):
-            bot.edit_message_text("🚫 *THIS NUMBER DATA NOT AVAILABLE TRY OTHER NUMBER*", message.chat.id, msg.message_id)
+            bot.edit_message_text("🚫 *THIS NUMBER DATA NOT AVAILABLE TRY OTHER MOBILE NUMBER*", message.chat.id, msg.message_id)
             return
 
         results = data.get("result", [])
