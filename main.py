@@ -60,27 +60,21 @@ def send_welcome(message):
         return
     
     welcome_text = (
-        "🎉 *WELCOME TO OSINT BOT* ✅\n\n"
+        "🎉 *WELCOME TO ARPIT OP OSINT BOT* ✅\n\n"
         "🔍 **10-digit number bhejo**\n"
         "📱 *e.g. 9812345678*\n\n"
-        "⚡ Leaked data milega!\n\n"
+        "⚡ number dalo fatak se!\n\n"
         "🔴 *Credit: ARPITxPROTON*"
     )
     bot.send_message(message.chat.id, welcome_text, parse_mode='Markdown')
 
-# === NUMBER SEARCH ===
-def format_as_js(data):
-    lines = []
-    for key, value in data.items():
-        value_str = str(value).replace("'", '"')
-        lines.append(f"  {key}: {value_str}")
-    return "{\n" + "\n".join(lines) + "\n}"
-
-@bot.message_handler(func=lambda message: True)
+# FIXED: Only exact 10-digit numbers (no double response)
+@bot.message_handler(func=lambda m: m.text and len(''.join(c for c in m.text if c.isdigit())) == 10 and not m.text.startswith('/'))
 def handle_number(message):
+    # Your ENTIRE existing handle_number code here (same)
     user_id = message.from_user.id
     query = message.text.strip()
-
+    # ... rest same
     # Channel check
     if not is_user_member(user_id):
         bot.send_message(
