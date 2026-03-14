@@ -1,130 +1,172 @@
-#!/usr/bin/env python3
-import os
-import sys
-import time
-import json
-import logging
-from datetime import datetime, timedelta
-from collections import defaultdict
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 import telebot
-from telebot import types
-import python-dotenv
+import requests
+import json
+import time
+import logging
+from colorama import Fore, Style
 
-# Load .env (keeping old hardcoded as backup)
-python_dotenv.load_dotenv()
-
-# Config - env vars with old hardcoded fallback
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8285984712:AAHHJHQzkH1HAJ9wZTK4TB1TVtQ8VO8IX7s')
-CHANNEL_1 = os.getenv('CHANNEL_1', '-1002602851793')  # Only 1 channel now
-OWNER_NUMBER = os.getenv('OWNER_NUMBER', '8090544126')
-LEAK_API_URL = os.getenv('LEAK_API_URL', 'https://usesirosint.vercel.app/api/numinfo')
-LEAK_API_KEY = os.getenv('LEAK_API_KEY', 'NIGHTFALLHUBz')
-COOLDOWN_SECONDS = int(os.getenv('COOLDOWN_SECONDS', '30'))
-
-# Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.FileHandler('osint-bot.log'), logging.StreamHandler()]
-)
-logger = logging.getLogger(__name__)
-
+# === BOT TOKEN ===
+BOT_TOKEN = "8285984712:AAHHJHQzkH1HAJ9wZTK4TB1TVtQ8VO8IX7s"
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Cooldown tracking
-user_cooldowns = {}
+# === YOUR CHANNELS (FIXED) ===
+CHANNEL_1 = "@VividYTOfficial"      
+CHANNEL_2 = "-1002602851793"        
+CHANNEL_3 = "-1002773252709"        
 
-# Session with retries
-session = requests.Session()
-retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429,500,502,503,504])
-adapter = HTTPAdapter(max_retries=retry_strategy)
-session.mount('http://', adapter)
-session.mount('https://', adapter)
+# === YOUR PROTECTED NUMBER ===
+MY_NUMBER = "8090544126"
 
+# === API CONFIGURATION ===
+API_TOKEN = "NIGHTFALLHUBz"
+URL = "https://usesirosint.vercel.app/api/numinfo"
+
+# Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s',
+                    handlers=[logging.FileHandler('osint-bot.log'), logging.StreamHandler()])
+logger = logging.getLogger(__name__)
+
+# === CHANNEL MEMBERSHIP CHECK ===
 def is_user_member(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL_1, user_id)
-        return member.status not in ['left', 'kicked']
-    except:
-        return False
+    channels = [CHANNEL_2, CHANNEL_3]
+    for channel_id in channels:
+        try:
+            chat_member = bot.get_chat_member(channel_id, user_id)
+            status = chat_member.status
+            print(f"✅ {channel_id}: {status}")
+            if status not in ['member', 'administrator', 'creator']:
+                return False
+        except Exception as e:
+            print(f"❌ Error {channel_id}: {e}")
+            return False
+    print(f"✅ User APPROVED!")
+    return True
 
+# === START COMMAND ===
 @bot.message_handler(commands=['start'])
-def start_message(message):
+def send_welcome(message):
     user_id = message.from_user.id
+    print(f"\n🔍 Checking user: {user_id}")
+    
     if not is_user_member(user_id):
-        bot.reply_to(message, """📢 <b>Channel 1:</b> https://t.me/+Q5VXFHviVoVjZjM9
-
-🔒 Join first then /start! 👇""", parse_mode='HTML')
+        join_msg = (
+            "🔒 *PEHLE YE 2 CHANNELS JOIN KARO:*\n\n"
+            "📢 **Channel 1:** https://t.me/VividYTOfficial\n"
+            "📢 **Channel 2:** https://t.me/+Q5VXFHviVoVjZjM9\n\n"
+            "✅ *Dono join karo → /start karo*\n\n"
+            "🔴 *Credit: ARPITxPROTON*"
+        )
+        bot.send_message(message.chat.id, join_msg, parse_mode='Markdown', disable_web_page_preview=True)
         return
     
-    bot.reply_to(message, f"""
-✅ <b>OSINT Bot Ready!</b>
+    welcome_text = (
+        "🎉 *WELCOME TO OSINT BOT* ✅\n\n"
+        "🔍 **10-digit number bhejo**\n"
+        "📱 *e.g. 9812345678*\n\n"
+        "⚡ Leaked data milega!\n\n"
+        "🔴 *Credit: ARPITxPROTON*"
+    )
+    bot.send_message(message.chat.id, welcome_text, parse_mode='Markdown')
 
-📱 Send 10-digit number
-⏱️ Cooldown: {COOLDOWN_SECONDS}s
-🔒 Owner protected: {OWNER_NUMBER}
-    """, parse_mode='HTML')
+# === NUMBER SEARCH ===
+def format_as_js(data):
+    lines = []
+    for key, value in data.items():
+        value_str = str(value).replace("'", '"')
+        lines.append(f"  {key}: {value_str}")
+    return "{\n" + "\n".join(lines) + "\n}"
 
-@bot.message_handler(func=lambda message: message.text and message.text.isdigit() and len(message.text) == 10)
+@bot.message_handler(func=lambda message: True)
 def handle_number(message):
     user_id = message.from_user.id
-    number = message.text
-    
-    # Owner troll
-    if number == OWNER_NUMBER:
-        bot.reply_to(message, "🤡 <b>HE IS YOUR FATHER</b> 🤡\n\nBoss ko mat tang karo! 😈", parse_mode='HTML')
-        return
-    
-    # Member check
-    if not is_user_member(user_id):
-        bot.reply_to(message, """📢 <b>Channel 1:</b> https://t.me/+Q5VXFHviVoVjZjM9
+    query = message.text.strip()
 
-❌ Join first!""", parse_mode='HTML')
+    # Channel check
+    if not is_user_member(user_id):
+        bot.send_message(
+            message.chat.id,
+            "🚫 *CHANNELS JOIN NHI KIYE!*\n\n"
+            "📢 https://t.me/VividYTOfficial\n"
+            "📢 https://t.me/+Q5VXFHviVoVjZjM9",
+            parse_mode='Markdown',
+            disable_web_page_preview=True
+        )
         return
-    
-    # Cooldown
-    now = time.time()
-    if user_id in user_cooldowns and now - user_cooldowns[user_id] < COOLDOWN_SECONDS:
-        remaining = int(COOLDOWN_SECONDS - (now - user_cooldowns[user_id]))
-        bot.reply_to(message, f"⏳ {remaining}s wait karo!")
+
+    # **🚫 YOUR NUMBER PROTECTION**
+    num = ''.join(c for c in query if c.isdigit())
+    if num == MY_NUMBER:
+        troll_msg = (
+            "😂 **HE IS YOUR FATHER**\n\n"
+            "📱 **Number:** `8090544126`\n"
+            "👑 **Owner:** ARPITxPROTON\n\n"
+            "❌ *PAPA HU BETA TERA!*\n\n"
+            "🔴 *Credit: ARPITxPROTON*"
+        )
+        bot.send_message(message.chat.id, troll_msg, parse_mode='Markdown')
+        print(f"🚫 User {user_id} tried to search MY_NUMBER!")
         return
-    user_cooldowns[user_id] = now
-    
-    msg = bot.reply_to(message, "🔍 Checking leaks...")
+
+    # Normal validation
+    if len(num) != 10:
+        bot.send_message(message.chat.id, "⚠️ *10 DIGIT NUMBER BEJO*\n`9812345678`")
+        return
+
+    # Searching...
+    msg = bot.send_message(message.chat.id, "🔍 *Searching leaks...*")
     
     try:
-        resp = session.get(LEAK_API_URL, params={'number': number, 'key': LEAK_API_KEY}, timeout=10)
-        resp.raise_for_status()
+        params = {"key": API_TOKEN, "num": num}
+        resp = requests.get(URL, params=params, timeout=15)
         data = resp.json()
-        
-        if not data.get('leaks'):
-            bot.edit_message_text(f"✅ <b>Clean!</b>\n\n<code>{number}</code>\nNo leaks found!", 
-                                msg.chat.id, msg.message_id, parse_mode='HTML')
-        else:
-            leaks = data['leaks'][:5]
-            result = f"🚨 <b>LEAKS!</b>\n\n<code>{number}</code>\n\n"
-            for leak in leaks:
-                result += f"• {leak.get('site', 'Unknown')}\n"
-            if len(data['leaks']) > 5:
-                result += f"\n+{len(data['leaks'])-5} more"
-            bot.edit_message_text(result, msg.chat.id, msg.message_id, parse_mode='HTML')
-            
-    except Exception as e:
-        logger.error(f"Error {number}: {e}")
-        bot.edit_message_text("❌ API error! Try later.", msg.chat.id, msg.message_id)
 
-if __name__ == '__main__':
-    print("✅ READY!")
-    logger.info("Bot starting with DELAYED polling...")
+        if not data.get("success"):
+            bot.edit_message_text("🚫 *THIS NUMBER DATA NOT AVAILABLE TRY OTHER MOBILE NUMBER*", message.chat.id, msg.message_id)
+            return
+
+        results = data.get("result", [])
+        if not results:
+            bot.edit_message_text("❌ *No leaks found*", message.chat.id, msg.message_id)
+            return
+
+        # Remove duplicates
+        unique = []
+        seen = set()
+        for entry in results:
+            key = tuple(sorted(entry.items()))
+            if key not in seen:
+                seen.add(key)
+                unique.append(entry)
+
+        # Results
+        text = f"🔍 **Results: `{num}`** ({len(unique)} entries)\n\n"
+        for i, entry in enumerate(unique, 1):
+            js_data = format_as_js(entry)
+            text += f"**#{i}:**\n```js\n{js_data}\n```\n\n"
+
+        text += "🔴 *Credit: ARPITxPROTON*"
+        bot.edit_message_text(text, message.chat.id, msg.message_id, parse_mode='Markdown')
+
+    except Exception as e:
+        logger.error(f"API Error {num}: {e}")
+        bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, msg.message_id)
+
+# === SAFE POLLING WITH DELAY (AWS Anti-Abuse) ===
+if __name__ == "__main__":
+    print(f"{Fore.GREEN}🚀 OSINT BOT STARTING...{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}📢 Channel 1: {CHANNEL_2}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}📢 Channel 2: {CHANNEL_3}{Style.RESET_ALL}")
+    print(f"{Fore.RED}🔒 Protected Number: {MY_NUMBER}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}✅ READY WITH AWS-SAFE POLLING!{Style.RESET_ALL}")
     
+    print("\n" + "="*50)
+    
+    # 🚀 AWS-SAFE POLLING (No 409 + Anti-Abuse)
     while True:
         try:
-            print("🔄 Polling...")
-            bot.polling(none_stop=True, interval=2, timeout=25, long_polling_timeout=25)
+            print("🔄 Starting safe polling...")
+            bot.polling(none_stop=True, interval=3, timeout=30, long_polling_timeout=30)
         except Exception as e:
-            logger.error(f"Polling crash: {e}")
-            print("💤 Restarting in 10s...")
+            logger.error(f"Polling crashed: {e}")
+            print(f"💤 Restarting in 10s... ({e})")
             time.sleep(10)
